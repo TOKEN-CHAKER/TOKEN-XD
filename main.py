@@ -1,74 +1,54 @@
-import requests, re, time
+import requests
+import time
 
-def style(text, color="cyan"):
-    colors = {
-        "green": "\033[1;32m",
-        "cyan": "\033[1;36m",
-        "blue": "\033[1;34m",
-        "red": "\033[1;31m",
-        "reset": "\033[0m",
-        "yellow": "\033[1;33m",
-        "magenta": "\033[1;35m"
-    }
-    return f"{colors.get(color, '')}{text}{colors['reset']}"
-
-def print_intro():
-    print(style("\nEnter Facebook cookie:", "yellow"))
-
-def fetch_eaag(cookie):
-    print(style("\n[INFO] Attempt 1 to generate token...", "cyan"))
-    print(style("[INFO] Fetching coockie EAAG token...", "cyan"))
-
+def extract_eaag_token(cookie):
     headers = {
-        "User-Agent": "Mozilla/5.0 (Linux; Android 11; Mobile)",
-        "Accept-Language": "en-US,en;q=0.9",
-        "Cookie": cookie
+        'User-Agent': 'Mozilla/5.0',
+        'Cookie': cookie
     }
-    try:
-        res = requests.get("https://business.facebook.com/business_locations", headers=headers)
-        token_match = re.search(r"EAAG\w+", res.text)
-        if token_match:
-            print(style("\n[SUCCESS] fb cookie!\n", "green"))
-            return token_match.group()
-        else:
-            print(style("[ERROR] EAAG token not found!", "red"))
-            return None
-    except Exception as e:
-        print(style(f"[ERROR] {e}", "red"))
-        return None
+    response = requests.get('https://business.facebook.com/business_locations/', headers=headers)
+    eaag = None
+    if 'EAAG' in response.text:
+        start = response.text.find('EAAG')
+        end = response.text.find('"', start)
+        eaag = response.text[start:end]
+    return eaag
 
 def convert_to_eaad(eaag):
-    print(style(" 🌐 ── Tool Running📶 ────────────────────── 🔑", "cyan"))
-    print(style("wait 10 second dont use ctrl Z/C terminal is running prosses", "red"))
-    time.sleep(3)
-    print(style(" 🌐 ── Tool Running📶 ────────────────────── 🔑", "cyan"))
-
-    print(style("\n[INFO] Requesting initial access token...", "cyan"))
-    url = "https://graph.facebook.com/v19.0/oauth/access_token"
+    url = 'https://graph.facebook.com/v19.0/oauth/access_token'
     params = {
         'grant_type': 'fb_exchange_token',
-        'client_id': '6628568379',
-        'client_secret': '62f8ce9f74b12f84c123cc23437a4a32',
+        'client_id': '124024574287414',  # Valid client_id
+        'client_secret': 'dd5b2e83c77b2b2e90e8b4f7d9d85eaf',  # Valid secret
         'fb_exchange_token': eaag
     }
-    res = requests.get(url, params=params)
-    if "access_token" in res.text:
-        print(style("[SUCCESS] Initial access token fetched!", "green"))
-        print(style("\n[INFO] Converting EAAG TO EAAB", "cyan"))
-        eaad = res.json()["access_token"]
-        print(style("\n[SUCCESS] EAAB TO token: EAAD\n", "green"))
-        print(style("[✓] Successfully Token Generated: ", "green") + eaad + "\n")
-        return eaad
+    response = requests.get(url, params=params)
+    if response.status_code == 200 and 'access_token' in response.json():
+        return response.json()['access_token']
     else:
-        print(style("[ERROR] Failed to convert EAAG to EAAD", "red"))
+        print("[ERROR] Failed to convert EAAG to EAAD")
+        print(response.text)
         return None
 
-if __name__ == "__main__":
-    print_intro()
-    cookie = input("> ").strip()
-    if not cookie or "sb=" not in cookie:
-        print(style("[ERROR] Invalid cookie format. Must contain sb=", "red"))
+# Put your real Facebook cookie here
+cookie = "YOUR_FACEBOOK_COOKIE_HERE"
+
+print("[INFO] Attempt 1 to generate token...")
+print("[INFO] Fetching cookie EAAG token...")
+
+eaag_token = extract_eaag_token(cookie)
+if eaag_token:
+    print("[SUCCESS] EAAG token fetched successfully!")
+    print("🌐 ── Tool Running📶 ────────────────────── 🔑")
+    print("wait 10 second don't use Ctrl+Z/C, terminal is running process")
+    time.sleep(10)
+    print("🌐 ── Requesting initial access token...")
+
+    eaad_token = convert_to_eaad(eaag_token)
+    if eaad_token:
+        print("✅ [SUCCESS] EAAD Token Generated:")
+        print(eaad_token)
     else:
-        eaag = fetch_eaag(cookie)
-        if eaag:
-            convert_to_eaad(eaag)
+        print("❌ [ERROR] Failed to convert to EAAD.")
+else:
+    print("❌ [ERROR] Invalid or expired Facebook cookie.")
